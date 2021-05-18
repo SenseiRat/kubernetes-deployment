@@ -1,0 +1,82 @@
+---
+# tasks file for sft.nfs
+- name: Install required nfs packages
+  become: true
+  ansible.builtin.pacman:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - nfs-utils
+  when: ansible_pkg_mgr == 'pacman'
+
+- name: Install required nfs packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - nfs-common
+  when: ansible_pkg_mgr == 'apt'
+
+- name: Start and enable NFS server service
+  become: true
+  ansible.builtin.service:
+    name: nfs-server
+    state: started
+    enabled: true
+  when: nfs_role == 'server'
+
+- name: Create the NFS root directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ nfs_root }}"
+    state: directory
+  when: nfs_role == 'server'
+
+- name: Create the NFS share directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ nfs_shares }}/{{ item }}"
+    state: directory
+  with_items: "{{ nfs_items }}"
+  when: nfs_role == 'server'
+
+- name: Create the share subdirectories
+  become: true
+  ansible.builtin.file:
+    path: "nfs_shares}}/{{ item }}"
+    state: directory
+  with_items: "{{ nfs_items }}"
+  when: nfs_role == 'server'
+
+- name: Mount shares in discreet directory
+  become: true
+  ansible.posix.mount:
+    src: "{{ nfs_shares }}/{{ item }}"
+    path: "{{ nfs_root }}/{{ item }}"
+    fstype: none
+    opts: bind
+    state: mounted
+  with_items: "{{ nfs_items }}"
+  when: nfs_role == 'server'
+
+- name: Add NFS shares to exports file
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    line: "{{ nfs_root }}/{{ item }} {{ network_cidr }}(rw,sync)"
+  register: exports_changed
+  with_items: 
+    - ""                                             # intentionally left blank
+    - "{{ nfs_items }}"
+  when: nfs_role == 'server'
+
+- name: Re-export NFS shares
+  become: true
+  ansible.builtin.command:
+    argv: 
+      - exportfs
+      - -arv
+  when: 
+    - exports_changed is changed
+    - nfs_role == 'server'

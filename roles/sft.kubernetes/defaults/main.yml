@@ -1,0 +1,5 @@
+---
+# defaults file for sft.kubernetes
+kube_ver: '1.20.1'
+kube_apt_ver: "{{ kube_ver }}-00"
+kube_cidr: '10.20.0.0/16'

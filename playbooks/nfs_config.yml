@@ -1,0 +1,5 @@
+---
+- hosts: file_shares
+  gather_facts: true
+  roles:
+    - ../roles/sft.nfs

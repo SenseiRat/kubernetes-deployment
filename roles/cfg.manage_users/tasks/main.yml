@@ -1,0 +1,70 @@
+---
+# tasks file for cfg.manage_users
+- name: Remove default users
+  become: true
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: true
+  with_items:
+    - ubuntu
+    - pi
+
+- name: Create groups for users
+  become: true
+  ansible.builtin.group:
+    name: "{{ item.user }}"
+    state: present
+  with_items: "{{ users }}"
+
+- name: Create administrative and service users
+  become: true
+  ansible.builtin.user:
+    name: "{{ item.user }}"
+    state: present
+    shell: "{{ item.shell }}"
+    create_home: true
+    home: "{{ item.home }}"
+    groups: "{{ item.groups }}"
+    append: true
+    system: "{{ item.system }}"
+  with_items: "{{ users }}"
+
+- name: Set passwords for human accounts
+  become: true
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    password: "{{ admin_pass | password_hash('sha512') }}"
+    update_password: always
+
+- name: Create .ssh directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.home }}/.ssh"
+    state: directory
+    owner: "{{ item.user }}"
+    group: "{{ item.user }}"
+    mode: '0700'
+  with_items: "{{ users }}"
+
+- name: Add authorized keys file for admin user
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item.user }}-auth-keys"
+    dest: "{{ item.home }}/.ssh/authorized_keys"
+    owner: "{{ item.user }}"
+    group: "{{ item.user }}"
+    mode: '0600'
+    force: true
+  with_items: "{{ users }}"
+
+- name: Ensure service accounts are properly added to sudoers file
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/etc/sudoers.d/90-{{ ansible_user }}-permissions"
+    line: "{{ item }}"
+    create: true
+    validate: /usr/bin/visudo -cf %s
+  with_items:
+    - "# User rules for {{ ansible_user }} service account"
+    - "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL"

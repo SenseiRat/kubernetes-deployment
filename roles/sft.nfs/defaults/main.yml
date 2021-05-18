@@ -1,0 +1,6 @@
+---
+# defaults file for sft.nfs
+nfs_items:
+  - "pihole"
+  - "pihole/etc"
+  - "pihole/dnsmasq.d"

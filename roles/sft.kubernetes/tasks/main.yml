@@ -1,0 +1,194 @@
+---
+# tasks file for sft.kubernetes
+- name: Allow iptables to see bridged traffic
+  become: true
+  ansible.builtin.lineinfile:
+    path: '/etc/sysctl.d/k8s.conf'
+    line: "{{ item }}"
+    state: present
+    create: true
+  with_items:
+    - 'net.bridge.bridge-nf-call-ip6tables = 1'
+    - 'net.bridge.bridge-nf-call-iptables = 1'
+
+- name: Remove swapfile from /etc/fstab
+  become: true
+  ansible.builtin.mount:
+    name: "{{ item }}"
+    fstype: swap
+    state: absent
+  with_items:
+    - swap
+    - none
+
+- name: Disable swap
+  become: true
+  ansible.builtin.command: 
+    cmd: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Add Kubernetes apt key
+  become: true
+  ansible.builtin.apt_key:
+    url: 'https://packages.cloud.google.com/apt/doc/apt-key.gpg'
+    state: present
+
+- name: Add Kubernetes repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: 'deb https://apt.kubernetes.io/ kubernetes-xenial main'
+    state: present
+    filename: kubernetes.list
+
+# Using state: present here automatically holds packages, instead of using latest
+- name: Install Kubernetes
+  become: true
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+    install_recommends: true
+  with_items:
+    - "kubelet={{ kube_apt_ver }}"
+    - "kubeadm={{ kube_apt_ver }}"
+    - "kubectl={{ kube_apt_ver }}"
+
+# Using state: present here automatically holds packages, instead of using latest
+- name: Install Kubernetes
+  become: true
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+    install_recommends: true
+  with_items:
+    - "kubelet={{ kube_apt_ver }}"
+    - "kubeadm={{ kube_apt_ver }}"
+    - "kubectl={{ kube_apt_ver }}"
+
+- name: Configure node IP
+  become: true
+  ansible.builtin.lineinfile:
+    path: '/etc/default/kubelet'
+    line: "KUBELET_EXTRA_ARGS=--node-ip={{ ansible_host }}"
+    create: true
+  register: kubelet_config
+
+- name: Restart kubelet
+  become: true
+  ansible.builtin.service:
+    name: kubelet
+    daemon_reload: true
+    state: restarted
+  when: kubelet_config is changed
+
+- name: Generate token for master initialization
+  become: true
+  command:
+    cmd: kubeadm token generate
+    creates: '/etc/kubernetes/manifests/kube-controller-manager.yaml'
+  register: init_token
+  when: kube_master == true
+
+- name: Initialize the control node
+  become: true
+  command: 
+    cmd: "kubeadm init --token={{ init_token.stdout | quote }} --kubernetes-version={{ kube_ver | quote }} --pod-network-cidr={{ kube_cidr | quote }}"
+    creates: '/etc/kubernetes/manifests/kube-controller-manager.yaml'
+  when: kube_master == true
+
+- name: Add Kubernetes service user to master node
+  become: true
+  ansible.builtin.user:
+    name: "{{ kubernetes_user }}" 
+    home: "/home/{{ kubernetes_user }}"
+    system: true
+  when: kube_master == true
+
+- name: Ensure kubernetes config directory exists
+  become: true
+  ansible.builtin.file:
+    name: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.username }}"
+    group: "{{ item.username }}"
+  with_items:
+    - {username: "{{ kubernetes_user }}", path: "/home/{{ kubernetes_user }}/.kube"}
+    - {username: "{{ ansible_user }}", path: "/home/{{ ansible_user }}/.kube"}
+    - {username: "{{ admin_user }}", path: "/home/{{ admin_user }}/.kube"}
+    - {username: 'root', path: '/root/.kube'}
+  when: kube_master == true
+
+- name: Copy config file to service user account
+  become: true
+  ansible.builtin.copy:
+    src: '/etc/kubernetes/admin.conf'
+    dest: "{{ item.path }}/config"
+    remote_src: true
+    owner: "{{ item.username }}"
+    group: "{{ item.username }}"
+    mode: '0700'
+  with_items:
+    - {username: "{{ kubernetes_user }}", path: "/home/{{ kubernetes_user }}/.kube"}
+    - {username: "{{ ansible_user }}", path: "/home/{{ ansible_user }}/.kube"}
+    - {username: "{{ admin_user }}", path: "/home/{{ admin_user }}/.kube"}
+    - {username: 'root', path: '/root/.kube'}
+  when: kube_master == true
+
+- name: Download kube flannel
+  become: true
+  ansible.builtin.get_url:
+    url: 'https://raw.githubusercontent.com/coreos/flannel/v0.13.0/Documentation/kube-flannel.yml'
+    dest: "/home/{{ kubernetes_user }}/kube-flannel.yml"
+    owner: "{{ kubernetes_user }}"
+    group: "{{ kubernetes_user }}"
+    mode: '0644'
+  when: kube_master == true
+
+- name: Install kube flannel
+  become: true
+  command:
+    cmd: "kubectl apply -f /home/{{ kubernetes_user | quote }}/kube-flannel.yml"
+    creates: '/run/flannel'
+  when: kube_master == true
+
+- name: Generate join command
+  become: true
+  command:
+    cmd: kubeadm token create --print-join-command
+  register: join_command
+  when: kube_master == true
+
+- name: Store join command for later use
+  local_action: 
+    module: ansible.builtin.copy
+    content: "{{ join_command.stdout_lines[0] }}"
+    dest: "./join-command.sh"
+  run_once: true
+  when: kube_master == true
+
+- name: Join the node to the cluster
+  become: true
+  script: join-command.sh
+  args:
+    executable: '/bin/sh'
+    creates: '/etc/kubernetes/pki/ca.crt'
+  when: kube_master == false
+
+- name: Clean up the join command file
+  local_action:
+    module: ansible.builtin.file
+    path: "./join-command.sh"
+    state: absent
+  run_once: true
+  when: kube_master == true
+
+- name: Install pip dependencies
+  ansible.builtin.pip:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - pyyaml
+    - openshift
+    - pyhelm
+    - grpcio

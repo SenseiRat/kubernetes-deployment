@@ -1,0 +1,19 @@
+---
+- hosts: kube-00
+  gather_facts: false
+  tasks:
+    - name: Deploy pihole container to kubernetes
+      become: true
+      community.kubernetes.k8s:
+        state: present
+        src: "{{ lookup('file', '../manifests/{{ item }}') | from_yaml }}"
+        validate:
+          fail_on_error: true
+      with_items:
+        - "pihole-storage-class.yml"
+        - "pihole-local-etc-volume.yml"
+        - "pihole-local-etc-claim.yml"
+        - "pihole-local-dnsmasq-volume.yml"
+        - "pihole-local-dnsmasq-claim.yml"
+        - "pihole-deployment.yml"
+        - "pihole-service.yml"

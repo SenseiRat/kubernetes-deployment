@@ -1,0 +1,9 @@
+---
+- name: All hosts configuration
+  import_playbook: playbooks/initial_config.yml
+
+- name: Configure Kubernetes nodes
+  import_playbook: playbooks/kube_nodes.yml
+
+- name: Configure NFS nodes
+  import_playbook: playbooks/nfs_config.yml

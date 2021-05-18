@@ -1,0 +1,54 @@
+---
+# tasks file for sft.docker
+- name: Install Docker
+  become: true
+  ansible.builtin.apt:
+    name: 'docker.io'
+    state: latest
+    update_cache: true
+    install_recommends: true
+    cache_valid_time: 3600
+
+- name: docker_status
+  become: true
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Configure cgroups to use systemd
+  become: true
+  ansible.builtin.copy:
+    src: 'daemon.json'
+    dest: '/etc/docker/daemon.json'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+
+- name: Store contents of cmdline file
+  ansible.builtin.slurp:
+    src: '/boot/firmware/cmdline.txt'
+  register: cmdline
+
+- name: Store the contents of cmdline in a variable to manipulate
+  ansible.builtin.set_fact:
+    cmdline_string: "{{ cmdline['content'] | b64decode | trim }}"
+
+- name: Generate the string that should be added to the cmdline file
+  ansible.builtin.set_fact:
+    cmdline_string: "{{ cmdline_string }} {{ item }}"
+  when: not cmdline['content'] | b64decode | regex_search(item | string)
+  with_items: "{{ limit_settings }}"
+
+- name: Enable limit support for the pi
+  become: true
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/cmdline.txt
+    regexp: "{{ cmdline['content'] | b64decode }}"
+    line: "{{ cmdline_string }}"
+  register: needs_reboot
+
+- name: Reboot device
+  become: true
+  ansible.builtin.reboot:
+  when: needs_reboot is changed

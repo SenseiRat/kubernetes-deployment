@@ -1,0 +1,21 @@
+---
+# defaults file for cfg.manage_users
+sudo_group: "{{ 'sudo' if
+                  ansible_distribution == 'Debian' or
+                  ansible_distribution == 'Ubuntu'
+                else 'wheel'}}"
+default_groups: "{{ 'audio, input, lp, storage, video, sys, network, power, docker' if
+                      ansible_distribution == 'Archlinux' else
+                    'adm, dialout, cdrom, floppy, audio, dip, video, plugdev, netdev, lxd' if
+                      ansible_distribution == 'Ubuntu' }}"
+users:
+  - {user: "{{ admin_user }}",
+     shell: "/bin/bash",
+     home: "/home/{{ admin_user }}",
+     groups: ["{{ admin_user }}", "{{ sudo_group }}", "{{ default_groups }}"],
+     system: false}
+  - {user: "{{ ansible_user }}",
+     shell: "/bin/bash",
+     home: "/home/{{ ansible_user }}",
+     groups: ["{{ ansible_user }}", "{{ default_groups }}"],
+     system: true}

@@ -1,0 +1,9 @@
+---
+# tasks file for cfg.security_configuration
+- name: Ensure popularity-contest package is not installed
+  become: true
+  ansible.builtin.apt:
+    name: popularity-contest
+    state: absent
+  when: ansible_distribution == "Ubuntu"
+

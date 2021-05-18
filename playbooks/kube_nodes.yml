@@ -1,0 +1,8 @@
+---
+- hosts: kubernetes
+  gather_facts: true
+  roles:
+    - ../roles/sft.docker
+    - ../roles/sft.kubernetes
+    - {role: '../roles/sft.helm', when: kube_master == true} 
+      # - {role: '../roles/kub.ingress-nginx', when: kube_master == true}
