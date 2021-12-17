@@ -2,24 +2,27 @@
 
 function display_help {
 	echo -e "\nUsage: ./server-setup.sh -[a|d|g|i|m]"
-	echo -e "\t-a: Admin user name"
+	echo -e "\t-a: Target IP address (what you want the node to be set to)"
 	echo -e "\t-d: Distribution (ubuntu|raspbian)"
 	echo -e "\t-H: Hostname"
-	echo -e "\t-i: IP address of target machine"
+	echo -e "\t-i: Current IP (dhcp assigned IP when node first spins up)"
 	echo -e "\t-m: Maintenance user name"
+	echo -e "\t-u: Admin user name"
 	echo -e "\t-h: Display this help"
 	exit 1
 }
 
-while getopts ":a:d:h:H:i:m:" opt
+while getopts ":a:d:h:H:i:m:u:" opt
 do
 	case "${opt}" in
-		a ) ADMIN_USER=${OPTARG};;
+		a ) TARGET_IP=${OPTARG};;
 		d ) DISTRO=${OPTARG};;
 		H ) HOST_NAME=${OPTARG};;
-		i ) IP_ADDR=${OPTARG};;
+		i ) CURRENT_IP=${OPTARG};;
 		m ) MAINT_USER=${OPTARG};;
+		u ) ADMIN_USER=${OPTARG};;
 		h ) display_help;;
+		* ) display_help;;
 	esac
 done
 
@@ -53,8 +56,12 @@ SSH_OPTS="StrictHostKeyChecking=no"
 TEMP_PASS="TempPass123"
 
 # Install some required packages on the control machine
-if $(uname -a | grep -iq manjaro); then
+
+if uname -a | grep -iq manjaro; then
 	sudo pacman -Syu sshpass expect --noconfirm >> /dev/null
+fi
+if uname -a | grep -iq ubuntu; then
+	sudo apt install -yqq sshpass expect >> /dev/null
 fi
 
 # Set up to automatically pull the public SSH keys
@@ -73,8 +80,8 @@ if [[ ${DISTRO} == "ubuntu" ]]; then
 	GROUP_LIST="sudo,adm,dialout,cdrom,floppy,audio,dip,video,plugdev,netdev,lxd"
 	DEFAULT_SUDOERS="/etc/sudoers.d/90-cloud-init-users"
 	UPDATE_COMMAND="apt-get update -yqq && sudo apt-get upgrade -yqq 2>&1 >> /dev/null"
-	MOTD_DISABLE="sed -i 's/ENABLED=1/ENABLED=0' /etc/default/motd-news"
-	MOTD_ENABLE="sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/motd-news"
+	DISABLE_MOTD="sed -i 's/ENABLED=1/ENABLED=0' /etc/default/motd-news"
+	ENABLE_MOTD="sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/motd-news"
 fi
 if [[ ${DISTRO} == "raspbian" ]]; then
 	DEFAULT_USER="pi"
@@ -98,7 +105,7 @@ fi
 EOF
 
 # Add administrator account
-sshpass -p ${TEMP_PASS} ssh -o ${SSH_OPTS} ${DEFAULT_USER}@${IP_ADDR} << EOF
+sshpass -p ${TEMP_PASS} ssh -o ${SSH_OPTS} ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Adding administrator account"
 	sudo useradd -d /home/${ADMIN_USER} -m -G ${GROUP_LIST} -s /bin/bash -U ${ADMIN_USER}
 	sudo mkdir -p /home/${ADMIN_USER}/.ssh
@@ -109,7 +116,7 @@ sshpass -p ${TEMP_PASS} ssh -o ${SSH_OPTS} ${DEFAULT_USER}@${IP_ADDR} << EOF
 EOF
 
 # Add maintenance account
-sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@${IP_ADDR} << EOF
+sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}"} << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Adding Ansible maintenance account"
 	sudo useradd -d /home/${MAINT_USER} -m -s /bin/bash -r ${MAINT_USER}
 	sudo mkdir -p /home/${MAINT_USER}/.ssh
@@ -119,7 +126,7 @@ sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@${IP_ADDR} << EOF
 EOF
 
 # Add maintenance account to sudoers file and disable default user from having sudoers permissions
-sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@${IP_ADDR} << EOF
+sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Setting sudoers permissions"
 	sudo echo -e "# User rules for ${MAINT_USER} service account\n${MAINT_USER} ALL=(ALL) NOPASSWD:ALL" > 90-${MAINT_USER}-permissions
 	sudo chown 0:0 90-${MAINT_USER}-permissions
@@ -129,7 +136,7 @@ sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@${IP_ADDR} << EOF
 EOF
 
 # Set the hostname for the device, install the updates, and reboot
-sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@${IP_ADDR} << EOF
+sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Setting hostname and installing updates"
 	sudo hostnamectl set-hostname ${HOST_NAME}
 	sudo ${UPDATE_COMMAND}
@@ -142,7 +149,7 @@ EOF
 # Sleep while we wait for the system to come back up
 sleep 5 # this is to make sure we don't ping before the system has gone down
 while :; do
-	if ping -c 1 ${IP_ADDR} | grep '64 bytes from'; then
+	if ping -c 1 "${CURRENT_IP}" | grep '64 bytes from'; then
 		break
 	fi
 	echo "..."
