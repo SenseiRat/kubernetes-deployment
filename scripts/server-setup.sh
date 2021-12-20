@@ -1,8 +1,13 @@
 #!/bin/bash
 
+# Set some defaults
+SSH_OPTS="StrictHostKeyChecking=no"
+TEMP_PASS="TempPass123"
+IP_REGEX="(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+
 function display_help {
 	echo -e "\nUsage: ./server-setup.sh -[a|d|g|i|m]"
-	echo -e "\t-a: Target IP address (what you want the node to be set to)"
+	echo -e "\t-a: Target IP address (what you want the node to be assigned)"
 	echo -e "\t-d: Distribution (ubuntu|raspbian)"
 	echo -e "\t-H: Hostname"
 	echo -e "\t-i: Current IP (dhcp assigned IP when node first spins up)"
@@ -30,6 +35,13 @@ done
 if [[ $OPTIND -eq 1 ]]; then
 	display_help
 fi
+if [[ -z $TARGET_IP ]]; then
+	# Attempt to determine the desired IP from the ansible configuration file
+	if ! TARGET_IP=$(grep -A1 "{$HOST_NAME}" ../hosts.yml | grep -Eo "${IP_REGEX}"); then
+		echo "No target IP address defined and unable to determine automatically."
+		exit 1
+	fi
+fi
 if [[ -z $ADMIN_USER ]]; then
 	ADMIN_USER="sean"
 	echo "Using default of sean for admin user name."
@@ -43,7 +55,7 @@ if [[ -z $HOST_NAME ]]; then
 	exit 1
 fi
 if [[ -z $IP_ADDR ]]; then
-	echo "Please specify the IP address for the target device."
+	echo "Please specify the DHCP IP address for the target device."
 	exit 1
 fi
 if [[ -z $MAINT_USER ]]; then
@@ -51,16 +63,13 @@ if [[ -z $MAINT_USER ]]; then
 	echo "Using default of ansible for maintenance user."
 fi
 
-# Set some defaults
-SSH_OPTS="StrictHostKeyChecking=no"
-TEMP_PASS="TempPass123"
-
 # Install some required packages on the control machine
-
-if uname -a | grep -iq manjaro; then
+# Arch/Manjaro
+if uname -a | grep -iq 'arch|manjaro'; then
 	sudo pacman -Syu sshpass expect --noconfirm >> /dev/null
 fi
-if uname -a | grep -iq ubuntu; then
+# Debian/Ubuntu
+if uname -a | grep -iq 'debian|ubuntu'; then
 	sudo apt install -yqq sshpass expect >> /dev/null
 fi
 
@@ -82,6 +91,26 @@ if [[ ${DISTRO} == "ubuntu" ]]; then
 	UPDATE_COMMAND="apt-get update -yqq && sudo apt-get upgrade -yqq 2>&1 >> /dev/null"
 	DISABLE_MOTD="sed -i 's/ENABLED=1/ENABLED=0' /etc/default/motd-news"
 	ENABLE_MOTD="sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/motd-news"
+
+	GATEWAY_IP=$(ip r | grep default | grep -Eo "${IP_REGEX}" | head -n1)
+	read -r -d NETCFG << EOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0
+      dhcp4: false
+	  addresses:
+	   - ${TARGET_IP}/24
+	  gateway4: ${GATEWAY_IP}
+	  nameservers:
+	    addresses: [8.8.8.8, 1.1.1.1]
+EOF
+
+	DISABLE_DHCP="echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg"
+	SET_NET_DRIVER="sed -i 's/driver: bcmgenet smsc95xx lan78xx/driver: bcmgenet"
+	SET_STATIC_IP="echo ${NETCFG} > /etc/cloud/cloud.cfg/01-netcfg.yaml"
+
 fi
 if [[ ${DISTRO} == "raspbian" ]]; then
 	DEFAULT_USER="pi"
@@ -89,6 +118,23 @@ if [[ ${DISTRO} == "raspbian" ]]; then
 	GROUP_LIST=""
 	DEFAULT_SUDOERS=""
 	UPDATE_COMMAND="sudo apt update && sudo apt upgrade -y"
+	
+	# Don't know what these will be in raspbian yet
+	DISABLE_DHCP=""
+	SET_NET_DRIVER=""
+	SET_STATIC_IP=""
+fi
+
+if [[ ${DISTRO} == "debian" ]]; then
+	DEFAULT_USER=""
+	DEFAULT_PASS=""
+	GROUP_LIST=""
+	DEFAULT_SUDOERS=""
+	UPDATE_COMMAND=""
+
+	DISABLE_DHCP=""
+	SET_NET_DRIVER=""
+	SET_STATIC_IP=""
 fi
 
 /usr/bin/expect << EOF
@@ -105,7 +151,7 @@ fi
 EOF
 
 # Add administrator account
-sshpass -p ${TEMP_PASS} ssh -o ${SSH_OPTS} ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
+sshpass -p ${TEMP_PASS} ssh -o ${SSH_OPTS} "${DEFAULT_USER}@${CURRENT_IP}" << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Adding administrator account"
 	sudo useradd -d /home/${ADMIN_USER} -m -G ${GROUP_LIST} -s /bin/bash -U ${ADMIN_USER}
 	sudo mkdir -p /home/${ADMIN_USER}/.ssh
@@ -116,7 +162,7 @@ sshpass -p ${TEMP_PASS} ssh -o ${SSH_OPTS} ${DEFAULT_USER}@"${CURRENT_IP}" << EO
 EOF
 
 # Add maintenance account
-sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}"} << EOF
+sshpass -p ${TEMP_PASS} ssh "${DEFAULT_USER}@${CURRENT_IP}"} << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Adding Ansible maintenance account"
 	sudo useradd -d /home/${MAINT_USER} -m -s /bin/bash -r ${MAINT_USER}
 	sudo mkdir -p /home/${MAINT_USER}/.ssh
@@ -126,7 +172,7 @@ sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}"} << EOF
 EOF
 
 # Add maintenance account to sudoers file and disable default user from having sudoers permissions
-sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
+sshpass -p ${TEMP_PASS} ssh "${DEFAULT_USER}@${CURRENT_IP}" << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Setting sudoers permissions"
 	sudo echo -e "# User rules for ${MAINT_USER} service account\n${MAINT_USER} ALL=(ALL) NOPASSWD:ALL" > 90-${MAINT_USER}-permissions
 	sudo chown 0:0 90-${MAINT_USER}-permissions
@@ -135,10 +181,14 @@ sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
 	sudo mv ${DEFAULT_SUDOERS} ${DEFAULT_SUDOERS}~
 EOF
 
-# Set the hostname for the device, install the updates, and reboot
-sshpass -p ${TEMP_PASS} ssh ${DEFAULT_USER}@"${CURRENT_IP}" << EOF
-	echo ${TEMP_PASS} | sudo -S echo "Setting hostname and installing updates"
+# Set the hostname and static IP for the device, install the updates, and reboot
+sshpass -p ${TEMP_PASS} ssh "${DEFAULT_USER}@${CURRENT_IP}" << EOF
+	echo ${TEMP_PASS} | sudo -S echo "Setting hostname, static IP, and installing updates"
 	sudo hostnamectl set-hostname ${HOST_NAME}
+	${DISABLE_DHCP}
+	${SET_NET_DRIVER}
+	${SET_STATIC_IP}
+	sudo netplan apply  # this only applies to ubuntu, may not apply to Debian or Raspbian
 	sudo ${UPDATE_COMMAND}
 	echo "Enabling dynamic MOTD"
 	sudo ${ENABLE_MOTD}
@@ -159,4 +209,4 @@ done
 # Run Kubernetes Playbook
 echo "Initiating Ansible playbook..."
 sleep 5
-#ansible-playbook -i ../hosts.yml kube_nodes.yml -v
+ansible-playbook -i ../hosts.yml kube_nodes.yml -v
