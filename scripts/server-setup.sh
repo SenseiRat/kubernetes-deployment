@@ -88,30 +88,16 @@ if [[ ${DISTRO} == "ubuntu" ]]; then
 	DEFAULT_PASS="ubuntu"
 	GROUP_LIST="sudo,adm,dialout,cdrom,floppy,audio,dip,video,plugdev,netdev,lxd"
 	DEFAULT_SUDOERS="/etc/sudoers.d/90-cloud-init-users"
-	UPDATE_COMMAND="apt-get update -yqq && sudo apt-get upgrade -yqq 2>&1 >> /dev/null"
-	DISABLE_MOTD="sed -i 's/ENABLED=1/ENABLED=0' /etc/default/motd-news"
-	ENABLE_MOTD="sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/motd-news"
-
-	GATEWAY_IP=$(ip r | grep default | grep -Eo "${IP_REGEX}" | head -n1)
-	read -r -d NETCFG << EOF
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eth0
-      dhcp4: false
-	  addresses:
-	   - ${TARGET_IP}/24
-	  gateway4: ${GATEWAY_IP}
-	  nameservers:
-	    addresses: [8.8.8.8, 1.1.1.1]
-EOF
+	UPDATE_COMMAND="sudo apt-get update -yqq && sudo apt-get upgrade -yqq 2>&1 >> /dev/null"
+	DISABLE_MOTD="sudo sed -i 's/ENABLED=1/ENABLED=0' /etc/default/motd-news"
+	ENABLE_MOTD="sudo sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/motd-news"
 
 	DISABLE_DHCP="echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg"
-	SET_NET_DRIVER="sed -i 's/driver: bcmgenet smsc95xx lan78xx/driver: bcmgenet"
-	SET_STATIC_IP="echo ${NETCFG} > /etc/cloud/cloud.cfg/01-netcfg.yaml"
-
+	GATEWAY_IP=$(ip r | grep default | grep -Eo "${IP_REGEX}" | head -n1)
+	NET_CFG=$(sed "s/{{TARGET_IP}}/${TARGET_IP}/; s/{{GATEWAY_IP}}/$GATEWAY_IP}/"../templates/50-cloud-init.yaml)
+	SET_STATIC_IP="echo ${NET_CFG} | dd of=/etc/netplan/50-cloud-init.yaml"
 fi
+
 if [[ ${DISTRO} == "raspbian" ]]; then
 	DEFAULT_USER="pi"
 	DEFAULT_PASS="raspberry"
@@ -121,7 +107,6 @@ if [[ ${DISTRO} == "raspbian" ]]; then
 	
 	# Don't know what these will be in raspbian yet
 	DISABLE_DHCP=""
-	SET_NET_DRIVER=""
 	SET_STATIC_IP=""
 fi
 
@@ -133,7 +118,6 @@ if [[ ${DISTRO} == "debian" ]]; then
 	UPDATE_COMMAND=""
 
 	DISABLE_DHCP=""
-	SET_NET_DRIVER=""
 	SET_STATIC_IP=""
 fi
 
@@ -186,7 +170,6 @@ sshpass -p ${TEMP_PASS} ssh "${DEFAULT_USER}@${CURRENT_IP}" << EOF
 	echo ${TEMP_PASS} | sudo -S echo "Setting hostname, static IP, and installing updates"
 	sudo hostnamectl set-hostname ${HOST_NAME}
 	${DISABLE_DHCP}
-	${SET_NET_DRIVER}
 	${SET_STATIC_IP}
 	sudo netplan apply  # this only applies to ubuntu, may not apply to Debian or Raspbian
 	sudo ${UPDATE_COMMAND}
