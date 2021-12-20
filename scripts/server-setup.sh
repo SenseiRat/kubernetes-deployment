@@ -1,4 +1,5 @@
 #!/bin/bash
+# TODO: This whole script has become overly complex and needs a major rework
 
 # Set some defaults
 SSH_OPTS="StrictHostKeyChecking=no"
