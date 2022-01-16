@@ -8,9 +8,11 @@ network:
         eth0:
             dhcp4: false
             addresses: [{{TARGET_IP}}/24]
-            gateway4: {{GATEWAY_IP}}
             nameservers:
-              addresses: [8.8.8.8,8.8.8.4]
+              addresses: [8.8.8.8,8.8.4.4]
+            routes:
+              - to: default
+                via: {{GATEWAY_IP}} # 172.30.112.1
             match:
                 driver: bcmgenet
             optional: true
