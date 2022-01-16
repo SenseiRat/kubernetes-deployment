@@ -9,5 +9,6 @@
   gather_facts: true
   roles:
     - ../roles/cfg.manage_users
+    - ../roles/cfg.networking
     - ../roles/sft.python3
     - ../roles/cfg.security_configuration
