@@ -1,15 +1,44 @@
 ---
 # tasks file for sft.docker
+- name: Ensure dependencies are installed
+  become: true
+  ansible.builtin.apt:
+    name: 
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: latest
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: true
+
+- name: Add Docker apt key
+  become: true
+  ansible.builtin.apt_key:
+    url: 'https://download.docker.com/linux/ubuntu/gpg'
+    keyring: "{{ keyring }}"
+    state: present
+
+- name: Add Docker apt repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: "deb [arch={{ device_cpu }} signed-by={{ keyring }}] {{ docker_url }} {{ ansible_distribution_release }} stable"
+    filename: '/etc/apt/sources.list.d/docker'
+    state: present
+
 - name: Install Docker
   become: true
   ansible.builtin.apt:
-    name: 'docker.io'
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
     state: latest
-    update_cache: true
     install_recommends: true
-    cache_valid_time: 3600
+    update_cache: true
 
-- name: docker_status
+- name: Enable and start docker service
   become: true
   ansible.builtin.service:
     name: docker
