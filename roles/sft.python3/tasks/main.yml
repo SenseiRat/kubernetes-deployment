@@ -1,19 +1,20 @@
 ---
 # tasks file for sft.python3
-- name: Install Python3 and pip3
+- name: Install Python3 and pip3 on pacman systems
   become: true
-  pacman:
+  ansible.builtin.pacman:
     name: 
       - python3
       - python-pip
     state: latest
   when: ansible_pkg_mgr == 'pacman'
 
-- name: Install Python3
+- name: Install Python3 and pip3 on apt systems
   become: true
-  apt:
+  ansible.builtin.apt:
     name: 
       - python3
       - python3-pip
     state: latest
+    update_cache: true
   when: ansible_pkg_mgr == 'apt'
