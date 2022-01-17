@@ -49,11 +49,11 @@ fi
 	spawn ssh -o ${SSH_OPTS} ${DEFAULT_USER}@${CURRENT_IP}
 	expect "password:"
 	send "${DEFAULT_PASS}\r"
-	expect "password:"
+	expect "Current password:"
 	send "${DEFAULT_PASS}\r"
-	expect "password:"
+	expect "New password:"
 	send "${TEMP_PASS}\r"
-	expect "password:"
+	expect "Retype new password:"
 	send "${TEMP_PASS}\r"
 EOF
 
