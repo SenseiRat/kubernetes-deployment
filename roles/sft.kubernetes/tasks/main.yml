@@ -138,7 +138,7 @@
 - name: Download kube flannel
   become: true
   ansible.builtin.get_url:
-    url: 'https://raw.githubusercontent.com/coreos/flannel/v0.13.0/Documentation/kube-flannel.yml'
+    url: 'https://raw.githubusercontent.com/coreos/flannel/v{{ flannel_ver }}/Documentation/kube-flannel.yml'
     dest: "/home/{{ kubernetes_user }}/kube-flannel.yml"
     owner: "{{ kubernetes_user }}"
     group: "{{ kubernetes_user }}"

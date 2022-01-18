@@ -3,3 +3,5 @@
 kube_ver: '1.23.1'
 kube_apt_ver: "{{ kube_ver }}-00"
 kube_cidr: '10.20.0.0/16'
+
+flannel_ver: '0.16.1'
