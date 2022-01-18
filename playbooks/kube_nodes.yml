@@ -5,4 +5,4 @@
     - ../roles/sft.docker
     - ../roles/sft.kubernetes
     - {role: '../roles/sft.helm', when: kube_master == true} 
-    # - {role: '../roles/kub.ingress-nginx', when: kube_master == true}
+    - {role: '../roles/kub.nginx_ingress', when: kube_master == true}
