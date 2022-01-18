@@ -48,20 +48,24 @@ fi
 /usr/bin/expect << EOF
 	#!/usr/bin/expect -f
 	spawn ssh -o ${SSH_OPTS} ${DEFAULT_USER}@${CURRENT_IP}
-	expect "password:"
+	expect -re {password: $}
+	sleep 1
 	send "${DEFAULT_PASS}\r"
-	expect "Current password:"
+	expect -re {password: $}
+	sleep 1
 	send "${DEFAULT_PASS}\r"
-	expect "New password:"
+	expect -re {password: $}
+	sleep 1
 	send "${TEMP_PASS}\r"
-	expect "Retype new password:"
+	expect -re {password: $}
+	sleep 1
 	send "${TEMP_PASS}\r"
+	expect
 EOF
-
+set -x
 # Create the maintenance account, update the sudoers files, and configure the host
 sshpass -p ${TEMP_PASS} ssh -tt -o ${SSH_OPTS} "${DEFAULT_USER}@${CURRENT_IP}" << EOF
-	export 
-	
+    echo "Password reset successfully."
 	# Add maintenance account
 	echo ${TEMP_PASS} | sudo -S echo "Adding Ansible maintenance account"
 	sudo useradd -d /home/${MAINT_USER} -m -s /bin/bash -r ${MAINT_USER}
