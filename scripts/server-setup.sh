@@ -62,7 +62,7 @@ fi
 	send "${TEMP_PASS}\r"
 	expect
 EOF
-set -x
+
 # Create the maintenance account, update the sudoers files, and configure the host
 sshpass -p ${TEMP_PASS} ssh -tt -o ${SSH_OPTS} "${DEFAULT_USER}@${CURRENT_IP}" << EOF
     echo "Password reset successfully."
