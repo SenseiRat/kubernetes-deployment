@@ -3,5 +3,11 @@
 - name: Apply network configuration
   become: true
   template:
+    src: templates/99-disable-network-config.tpl
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+
+- name: Apply network configuration
+  become: true
+  template:
     src: templates/50-cloud-init.tpl
     dest: /etc/netplan/50-cloud-init.yaml
