@@ -31,7 +31,8 @@ DEFAULT_SUDOERS="/etc/sudoers.d/90-cloud-init-users"
 MAINT_USER="ansible"
 MAINT_PUB_KEY=$(cat "/home/sean/.ssh/${MAINT_USER}_id_rsa.pub")
 IP_REGEX="(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
-GATEWAY_IP=$(ip r | grep default | grep -Eo "${IP_REGEX}" | head -n1)
+# GATEWAY_IP=$(ip r | grep default | grep -Eo "${IP_REGEX}" | head -n1)
+GATEWAY_IP="192.168.1.1"
 NET_CFG=$(sed -e "s/{{TARGET_IP}}/${TARGET_IP}/" -e "s/{{GATEWAY_IP}}/$GATEWAY_IP/" ../templates/50-cloud-init.yaml)
 
 # Perform some checks on the control machine
