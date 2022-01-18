@@ -54,12 +54,12 @@
     group: 'root'
     mode: '0644'
 
-- name: Store contents of cmdline file
+- name: Slurp contents of cmdline file
   ansible.builtin.slurp:
     src: '/boot/firmware/cmdline.txt'
   register: cmdline
 
-- name: Store the contents of cmdline in a variable to manipulate
+- name: Store the contents of cmdline in a fact to manipulate
   ansible.builtin.set_fact:
     cmdline_string: "{{ cmdline['content'] | b64decode | trim }}"
 
