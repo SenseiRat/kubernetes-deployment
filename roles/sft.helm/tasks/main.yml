@@ -21,7 +21,7 @@
   ansible.builtin.apt_repository:
     repo: deb https://baltocdn.com/helm/stable/debian/ all main
     state: present
-    filename: helm-stable-debian.list
+    filename: helm-stable-debian
   when: ansible_pkg_mgr == 'apt'
 
 - name: Install helm
