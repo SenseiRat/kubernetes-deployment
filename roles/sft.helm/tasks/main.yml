@@ -1,6 +1,6 @@
 ---
 # tasks file for sft.helm
-- name: Install dependencies
+- name: Install apt dependencies
   become: true
   ansible.builtin.apt:
     name: "{{ item }}"
@@ -8,6 +8,16 @@
   with_items:
     - 'apt-transport-https'
   when: ansible_pkg_mgr == 'apt'
+
+- name: Install pip dependencies
+  ansible.builtin.pip:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - pyyaml
+    - openshift
+    - pyhelm
+    - grpcio
 
 - name: Add apt key for helm
   become: true

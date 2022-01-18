@@ -182,13 +182,3 @@
     state: absent
   run_once: true
   when: kube_master == true
-
-- name: Install pip dependencies
-  ansible.builtin.pip:
-    name: "{{ item }}"
-    state: present
-  with_items:
-    - pyyaml
-    - openshift
-    - pyhelm
-    - grpcio
