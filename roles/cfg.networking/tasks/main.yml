@@ -1,6 +1,6 @@
 ---
 # tasks file for cfg.networking
-- name: Apply network configuration
+- name: Disable DHCP
   become: true
   template:
     src: templates/99-disable-network-config.tpl
